@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Postura IA</title>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    #feedback { font-size: 18px; margin: 20px; font-weight: bold; }
+    #error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>Postura com IA</h1>
+  <button onclick="init()">Iniciar Avaliação</button>
+  <div id="webcam-container">
+    <video id="webcam" autoplay muted playsinline width="400" height="400"></video>
+  </div>
+  <p id="feedback">Aguardando inicialização...</p>
+  <p id="error"></p>
+
+  <script type="text/javascript">
+    const URL = "https://teachablemachine.withgoogle.com/models/vd0MsL3nU/"; // seu link
+
+    let model, webcam, isPredicting = false;
+
+    async function init() {
+      try {
+        document.getElementById('error').innerText = '';
+        document.getElementById('feedback').innerText = 'Carregando modelo...';
+        
+        // Carrega o modelo
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+        model = await tmPose.load(modelURL, metadataURL);
+        
+        // Configura a webcam
+        document.getElementById('feedback').innerText = 'Configurando câmera...';
+        const webcamElement = document.getElementById('webcam');
+        webcam = new tmPose.Webcam(400, 400, true);
+        await webcam.setup();
+        await webcam.play();
+        
+        // Atualiza o elemento de vídeo
+        webcamElement.width = webcam.width;
+        webcamElement.height = webcam.height;
+        
+        document.getElementById('feedback').innerText = 'Aguardando detecção...';
+        isPredicting = true;
+        predict();
+      } catch (error) {
+        console.error('Erro na inicialização:', error);
+        document.getElementById('error').innerText = 'Erro: ' + error.message;
+      }
+    }
+
+    async function predict() {
+      if (!isPredicting) return;
+      
+      try {
+        // Faz a predição
+        const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+        const prediction = await model.predict(posenetOutput);
+        updateFeedback(prediction);
+        
+        // Chama a próxima predição
+        window.requestAnimationFrame(predict);
+      } catch (error) {
+        console.error('Erro na predição:', error);
+        document.getElementById('error').innerText = 'Erro na detecção: ' + error.message;
+        isPredicting = false;
+      }
+    }
+
+    function updateFeedback(prediction) {
+      const feedback = document.getElementById("feedback");
+      
+      // Verifica se há predições válidas
+      if (!prediction || prediction.length < 2) {
+        feedback.innerText = "Não foi possível detectar a postura";
+        return;
+      }
+      
+      // Ordena as predições por probabilidade
+      prediction.sort((a, b) => b.probability - a.probability);
+      
+      if (prediction[0].probability > 0.8) {
+        feedback.innerText = `✅ ${prediction[0].className} (${Math.round(prediction[0].probability * 100)}%)`;
+      } else if (prediction[0].probability > 0.6) {
+        feedback.innerText = `⚠️ Possível ${prediction[0].className} (${Math.round(prediction[0].probability * 100)}%)`;
+      } else {
+        feedback.innerText = "🤔 Postura não clara. Ajuste sua posição";
+      }
+    }
+  </script>
+</body>
+</html>
